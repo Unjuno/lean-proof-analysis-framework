@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lean-proof-analysis-framework"
+version = "0.1.0"
+description = "Human- and agent-accessible source-level navigation for Lean proofs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "LPAF contributors"}]
+keywords = ["lean", "formal-proof", "proof-analysis", "research", "theorem"]
+classifiers = ["Programming Language :: Python :: 3", "Operating System :: OS Independent", "Development Status :: 2 - Pre-Alpha", "Topic :: Scientific/Engineering :: Mathematics"]
+dependencies = []
+
+[project.scripts]
+lpaf = "lean_proof_analysis.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

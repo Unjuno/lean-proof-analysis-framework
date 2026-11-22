@@ -1,0 +1,12 @@
+{
+  "src/Challenge.lean": "9677ace64b3a5e8b1a571d82d52ee13c53b08026",
+  "src/Development/AutomorphicArithmetic/CharacterBoxes/EveryCharacter.lean": "6ac769568b67f85f33565ba3e1eef7b91f53c55f",
+  "src/Development/AutomorphicArithmetic/CharacterBoxes/HalfPlane.lean": "dcd66cb38f94dfabe24700848a68dc9135bbd3fe",
+  "src/Development/AutomorphicArithmetic/CharacterBoxes/MainConclusion.lean": "ee340012ab19713a8acfecf8adc6a331cbc2f1a4",
+  "src/Development/AutomorphicArithmetic/CharacterBoxes/Supply.lean": "b104f034fc9c13758e280d1b7d33ac1ea370663a",
+  "src/Development/AutomorphicArithmetic/CharacterBoxes/ZeroFreeAllOfTopG.lean": "54d1b4b84e8c4b97c98379f0bf1bd6bf2f3b2da1",
+  "src/Formalism/GammaFactorNonvanishing/CritLine.lean": "95fa4da5c50119db164aa93944d106f22fdb576d",
+  "src/Main.lean": "9037948e51139b69597efae477e20150395ffbc7",
+  "src/Statements.lean": "f96f4326954c6289f6c335da71078d0b7f98d950",
+  "src/Supplements/Kernels/MainTheorems.lean": "6a542d7ce969a791fd12ce575f587e6bc29044bf"
+}
