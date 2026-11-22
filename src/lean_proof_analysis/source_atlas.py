@@ -497,7 +497,8 @@ def analyze(root:Path, out:Path, repo:str, commit:str, expected:dict|None=None, 
     # DOT is useful without graphviz; quote identifiers via JSON escaping.
     dot=["digraph LeanAtlas {", "  rankdir=LR;", "  node [shape=box, fontsize=10];"]
     for d in ds:
-        dot.append(f"  {json.dumps(d.id,ensure_ascii=False)} [label={json.dumps(d.short_name+'\\n'+d.path,ensure_ascii=False)}];")
+        node_label = d.short_name + "\n" + d.path
+        dot.append(f"  {json.dumps(d.id,ensure_ascii=False)} [label={json.dumps(node_label,ensure_ascii=False)}];")
     for src,dst,role,res,token in edges:
         dot.append(f"  {json.dumps(src,ensure_ascii=False)} -> {json.dumps(dst,ensure_ascii=False)} [label={json.dumps(role,ensure_ascii=False)}];")
     dot.append("}")
