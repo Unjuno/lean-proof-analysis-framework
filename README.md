@@ -4,7 +4,7 @@
 
 **日本語:** 大規模なLean形式的証明について、定理・依存候補・構造的類似・証明パターンを整理し、人間が原典に戻って内容を検討しやすくするオープンなライブラリです。初期の適用対象は公開リーマン予想形式化です。
 
-> **Status: experimental source-only baseline (v0.1).** This version scans Lean *text*. It does **not** invoke Lean, elaborate expressions, resolve actual references, establish theorem equivalence, determine mathematical correctness, or certify proofs. See [limits and evidence types](docs/ARCHITECTURE.md).
+> **Status: experimental source-only reading tools (v0.2).** This version scans Lean *text*. It does **not** invoke Lean, elaborate expressions, resolve actual references, establish theorem equivalence, determine mathematical correctness, or certify proofs. See [limits and evidence types](docs/ARCHITECTURE.md).
 
 ## Goals
 
@@ -22,9 +22,10 @@
 |---|---|---|
 | Python library (`analyze_project`, `load_report`) | Available | Runs source-level heuristic analysis |
 | CLI (`lpaf analyze`) | Available | Writes `analysis.json`, CSV, DOT, and Markdown |
+| Reading tools: search, inspect, compare, slice, similar | Available in v0.2 | Shared Python functions, CLI Markdown and JSON; see [reading API](docs/READING_API.md) |
 | Agent-compatible JSON | Available | Use `--json`, or read the versioned `analysis.json` file |
 | Lean 4 elaborated `Expr` / actual declaration references | Planned | Requires project-specific Lean toolchain |
-| MCP server for external agents | Planned | No MCP endpoint is shipped in v0.1 |
+| MCP server for external agents | Planned | No MCP endpoint is shipped in v0.2 |
 | Proof checking / correctness determination | Out of scope | Not claimed |
 
 ## Getting started
@@ -41,7 +42,28 @@ python -m unittest discover -s tests -v
 
 On Windows PowerShell, replace `$(git rev-parse HEAD)` with the current full commit ID. The `--repo` and `--commit` values establish **claimed provenance**; they are not automatically checked against the checkout unless a complete `--expected-manifest` is supplied.
 
-Inspect `reports/generated/demo/OVERVIEW.md` for humans, or `analysis.json` for agents. **Only derived reports should be shared**; source licensing and access conditions remain separate.
+Inspect `reports/generated/demo/OVERVIEW.md` or query `analysis.json` using the operations below. Since v0.2, the JSON contains full captured source spans; publishing a generated report also publishes those excerpts. Source licensing and access conditions remain separate from the toolkit's license.
+
+### Read, compare, and follow references
+
+```bash
+lpaf search reports/generated/demo/analysis.json true
+lpaf inspect reports/generated/demo/analysis.json Demo.true_two --full-text
+lpaf compare reports/generated/demo/analysis.json Demo.labelA Demo.labelB
+lpaf slice reports/generated/demo/analysis.json Demo.true_two --max-depth 2
+lpaf similar reports/generated/demo/analysis.json Demo.true_one --json
+```
+
+Each command uses the same result as its Python function. Add `--json` for an
+agent-readable result, or omit it for Markdown. Same-name ambiguity, pagination,
+text limits and graph frontiers are explicit. `--full-text` returns all **captured**
+text; enclosing section variables and implicit arguments remain unresolved.
+
+The [reading-tool design](docs/READING_TOOLS.md) explains seven prioritized ideas
+and their mathematical reading tasks. The [API reference](docs/READING_API.md)
+specifies the five implemented operations, errors, limits and migration from v0.1.
+The [validation record](docs/READING_VALIDATION.md) records fixture checks and the
+pinned RH pilot without claiming measured human benefits.
 
 ### Python API
 
@@ -56,6 +78,17 @@ report = analyze_project(
     source_prefix="examples/demo",
 )
 print(report["summary"])
+```
+
+```python
+from lean_proof_analysis import (
+    load_report, get_declaration, compare_declarations, dependency_slice,
+)
+
+report = load_report("reports/generated/demo/analysis.json")
+card = get_declaration(report, "Demo.true_two", max_chars=None)
+differences = compare_declarations(report, "Demo.labelA", "Demo.labelB")
+nearby = dependency_slice(report, "Demo.true_two", max_depth=2, max_nodes=20)
 ```
 
 ### Riemann Hypothesis case study (10-file pilot)
@@ -87,9 +120,11 @@ docs/ROADMAP.md            Phased implementation plan
 docs/RESEARCH.md           Related work and positioning
 docs/VALIDATION.md         Reproducibility and human-study protocol
 docs/AGENTS.md             Safe integration guidance for AI agents
+docs/READING_TOOLS.md      Prioritized reading tasks and research rationale
+docs/READING_API.md        Five query operations, bounds, errors and examples
 ```
 
-See [roadmap](docs/ROADMAP.md) for the next implementation tasks and [validation](docs/VALIDATION.md) for explicit test criteria. The first version provides a **toolkit foundation**, not evidence that human review time is already reduced.
+See [roadmap](docs/ROADMAP.md) for the next implementation tasks and [validation](docs/VALIDATION.md) for explicit test criteria. These tools provide a **reading workflow**; human review-time improvement has not yet been measured.
 
 ## License and upstream materials
 

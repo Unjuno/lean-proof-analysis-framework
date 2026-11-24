@@ -29,112 +29,94 @@ MODIFIERS = {"theorem", "lemma", "def", "abbrev", "axiom", "opaque", "instance",
 TACTICS = {"simp", "simpa", "rw", "rwa", "rewrite", "exact", "apply", "refine", "intro", "intros", "rcases", "cases", "obtain", "constructor", "linarith", "nlinarith", "omega", "ring", "norm_num", "positivity", "aesop", "tauto", "by_contra", "by_cases", "have", "let", "calc", "unfold", "change", "subst", "fun_prop", "assumption", "trivial", "decide", "first", "repeat", "induction", "simp_all", "norm_cast", "field_simp", "linear_combination"}
 STOP = {"by", "theorem", "lemma", "def", "Prop", "Type", "fun", "forall", "have", "this", "h", "at", "with", "from", "match", "let", "if", "then", "else", "True", "False", "Nat", "0", "1", "2", "3", "4", "5", "s", "n", "x", "N", "h1", "h0", "hz"}
 BORDER = re.compile(r"(?m)^[ \t]*(?:namespace|section|end|open|variable|variables|set_option|noncomputable[ \t]+section|import)\b")
+CHAR_LITERAL = re.compile(r"'(?:\\.|[^\\'\r\n])'")
+RAW_STRING_START = re.compile(r'r(#+)?"')
+
+
+def _literal_end(text: str, start: int) -> int | None:
+    """Recognize common literal forms; this is not Lean's extensible lexer."""
+    c = text[start]
+    if c == "«":
+        end = text.find("»", start + 1)
+        return len(text) if end < 0 else end + 1
+    # Apostrophes inside names (for example `foo'`) are not char delimiters.
+    if c == "'" and (start == 0 or not (text[start-1].isalnum() or text[start-1] in "_'")):
+        char = CHAR_LITERAL.match(text,start)
+        if char:
+            return char.end()
+    if c == "r" and (start == 0 or not (text[start-1].isalnum() or text[start-1] == "_")):
+        raw = RAW_STRING_START.match(text,start)
+        if raw:
+            close = '"' + (raw.group(1) or "")
+            end = text.find(close, raw.end())
+            return len(text) if end < 0 else end + len(close)
+    if c != '"':
+        return None
+    i = start + 1
+    while i < len(text):
+        if text[i] == "\\":
+            i += 2
+        elif text[i] == '"':
+            return i + 1
+        else:
+            i += 1
+    return len(text)
+
+
+def _mask_source(text: str, *, hide_literals: bool) -> str:
+    """Mask comments/literals while preserving every offset and newline."""
+    out = list(text)
+
+    def blank(start: int, end: int) -> None:
+        for pos in range(start, end):
+            if text[pos] != "\n":
+                out[pos] = " "
+
+    i = 0
+    while i < len(text):
+        if text.startswith("--", i):
+            end = text.find("\n", i)
+            end = len(text) if end < 0 else end
+            blank(i, end)
+            i = end
+        elif text.startswith("/-", i):
+            start = i
+            depth = 1
+            i += 2
+            while i < len(text) and depth:
+                if text.startswith("/-", i):
+                    depth += 1
+                    i += 2
+                elif text.startswith("-/", i):
+                    depth -= 1
+                    i += 2
+                else:
+                    i += 1
+            blank(start, i)
+        else:
+            end = _literal_end(text, i)
+            if end is None:
+                i += 1
+            else:
+                if hide_literals:
+                    blank(i, end)
+                i = end
+    return "".join(out)
 
 
 def masked(text: str) -> str:
-    """Keep lengths/newlines, mask Lean line/block comments (nested) and strings."""
-    a = list(text)
-    i, depth, quote, line_comment = 0, 0, False, False
-    while i < len(a):
-        c = text[i]
-        d = text[i:i+2]
-        if line_comment:
-            if c == "\n":
-                line_comment = False
-            else:
-                a[i] = " "
-            i += 1
-            continue
-        if depth:
-            if d == "/-":
-                a[i] = a[i+1] = " "
-                depth += 1
-                i += 2
-                continue
-            if d == "-/":
-                a[i] = a[i+1] = " "
-                depth -= 1
-                i += 2
-                continue
-            if c != "\n":
-                a[i] = " "
-            i += 1
-            continue
-        if quote:
-            if c == "\\" and i+1 < len(a):
-                a[i] = a[i+1] = " "
-                i += 2
-                continue
-            if c == '"':
-                quote = False
-            a[i] = " "
-            i += 1
-            continue
-        if d == "--":
-            a[i] = a[i+1] = " "
-            line_comment = True
-            i += 2
-            continue
-        if d == "/-":
-            a[i] = a[i+1] = " "
-            depth = 1
-            i += 2
-            continue
-        if c == '"':
-            a[i] = " "
-            quote = True
-        i += 1
-    return "".join(a)
+    """Mask comments and common literals/quoted names, retaining offsets.
+
+    Nested block comments, ordinary strings, raw strings, simple character
+    literals and quoted identifiers are handled. Custom syntax and interpolated
+    expression contents are not resolved by this source-only heuristic.
+    """
+    return _mask_source(text, hide_literals=True)
 
 
 def without_comments(text: str) -> str:
-    """Mask nested Lean comments but RETAIN string literals and their values.
-
-    Lexical scanning (`masked`) deliberately removes strings, whereas
-    comparison must preserve them: `def x := "a"` differs from `def y := "b"`.
-    This remains a heuristic, not a full Lean lexer.
-    """
-    out = list(text)
-    i, depth, quote = 0, 0, False
-    while i < len(text):
-        two = text[i:i + 2]
-        if quote:
-            if text[i] == "\\" and i + 1 < len(text):
-                i += 2
-                continue
-            if text[i] == '"':
-                quote = False
-            i += 1
-            continue
-        if depth:
-            if two == "/-":
-                depth += 1
-                out[i] = out[i + 1] = " "
-                i += 2
-                continue
-            if two == "-/":
-                depth -= 1
-                out[i] = out[i + 1] = " "
-                i += 2
-                continue
-            if text[i] != "\n":
-                out[i] = " "
-            i += 1
-            continue
-        if two == "--":
-            while i < len(text) and text[i] != "\n":
-                out[i] = " "
-                i += 1
-            continue
-        if two == "/-":
-            depth = 1
-            out[i] = out[i + 1] = " "
-            i += 2
-            continue
-        if text[i] == '"':
-            quote = True
-        i += 1
-    return "".join(out)
+    """Mask nested comments but retain literals and quoted names exactly."""
+    return _mask_source(text, hide_literals=False)
 
 
 def git_blob_sha(raw: bytes) -> str:
@@ -152,12 +134,21 @@ def similarity_terms(s: str) -> Counter:
 
 
 def normalized_expression(s: str) -> str:
-    # Tokenization removes only whitespace. This is a heuristic fingerprint,
-    # NOT alpha equivalence, definitional equality or term elaboration.
-    return " ".join(re.findall(r"[\w₀-₉]+|[^\s]", s, flags=re.UNICODE))
+    """A conservative source fingerprint: trim only outer whitespace.
+
+    Internal whitespace is retained, including inside strings, character
+    literals and quoted identifiers. Lean syntax extensions and indentation
+    mean even whitespace outside literals cannot generally be discarded by a
+    text-only adapter. Formatting differences can therefore produce distinct
+    fingerprints. Equality here is neither elaboration nor equivalence.
+    """
+    return s.strip()
 
 
 def find_def_separator(s: str) -> int:
+    # Mask without changing offsets: a string such as ":=" or "(" in a
+    # declaration header must not determine the statement/body boundary.
+    s = masked(s)
     depths = [0, 0, 0]
     opening = {"(": 0, "[": 1, "{": 2}
     closing = {")": 0, "]": 1, "}": 2}
@@ -206,6 +197,7 @@ class D:
     tactics: list[str]
     source_url: str
     statement_fp: str
+    source_text: str = ""
 
 
 def scan_file(full_path: Path, root: Path, base_url: str):
@@ -228,20 +220,21 @@ def scan_file(full_path: Path, root: Path, base_url: str):
         fq = name if "." in name else (ns+"."+name if ns else name)
         idx=bisect_right(anchors,m.start())
         end = anchors[idx] if idx < len(anchors) else len(src)
-        # Extract by original character offsets, then eliminate comments and
-        # strings for signatures and dependency scans.
+        # Retain the complete captured text. Boundaries are regex heuristics,
+        # so this is a source span, not an asserted complete elaborated term.
         tail = comparison_src[m.end():end]
         pivot=find_def_separator(tail)
         stmt = tail[:pivot] if pivot >= 0 else tail
         body = tail[pivot+2:] if pivot >= 0 else ""
-        body_tokens=IDENT.findall(body)
+        body_tokens=IDENT.findall(masked(body))
         out.append(D(
             id=f"{path}:{lineof(m.start())}:{fq}",name=fq,short_name=name.split(".")[-1],kind=kind,
             path=path,line=lineof(m.start()),end_line=max(lineof(m.start()),lineof(max(m.start(),end-1))),
-            statement=" ".join(stmt.split()),body=" ".join(body.split()),
+            statement=stmt.strip(),body=body.strip(),
             tactics=sorted(set(body_tokens)&TACTICS),
             source_url=f"{base_url}/{path}#L{lineof(m.start())}",
-            statement_fp=hashlib.sha256(normalized_expression(stmt + (" := " + body if kind in {"def","abbrev","opaque"} else "")).encode()).hexdigest()[:16],
+            statement_fp=hashlib.sha256(normalized_expression(stmt.strip() + (" := " + body.strip() if kind in {"def","abbrev","opaque"} else "")).encode()).hexdigest()[:16],
+            source_text=src[m.start():end],
         ))
     imps=[]
     for m in IMPORT.finditer(clean):
@@ -346,14 +339,14 @@ def similarities(ds: list[D], max_pairs:int=100_000, min_score:float=.78):
     for a,b in sorted(pairs):
         x,y=ds[a],ds[b]
         vx,vy=vectors[a],vectors[b]
-        shared=set(vx)&set(vy)
+        shared=sorted(set(vx)&set(vy))
         cos=sum(vx[t]*vy[t] for t in shared)/(norms[a]*norms[b])
         shared_tactics=sorted(set(x.tactics)&set(y.tactics))
         syntactic=fingerprints[a]==fingerprints[b] and bool(comparison_text(x).strip())
         if cos>=min_score or syntactic or len(shared_tactics)>=2:
             results.append({"from":x.id,"to":y.id,"tfidf_cosine":round(cos,4),
                 "same_syntax_fingerprint":syntactic,"shared_tactics":shared_tactics,
-                "shared_symbols":sorted(shared,key=lambda t:-(df[t] and (math.log((n+1)/(df[t]+1))+1)))[:12],
+                "shared_symbols":sorted(shared,key=lambda t:(-(math.log((n+1)/(df[t]+1))+1),t))[:12],
                 "interpretation":"syntactic-candidate-only"})
     results.sort(key=lambda r:(not r["same_syntax_fingerprint"],-r["tfidf_cosine"],-len(r["shared_tactics"]),r["from"],r["to"]))
     return results, {"potential_pairs_examined":len(pairs),"pair_cap":max_pairs,"cap_reached":len(pairs)>=max_pairs}
@@ -414,12 +407,28 @@ def graph_summaries(ds: list[D], links: list[tuple], entry_names: list[str] | No
                  'Outliers are long statements, not suspicious proofs.',
                  'Routes stop at unavailable source files.']}
 
-def public_record(d:D):
-    # Public reports are navigation metadata, not a reproduction of the
-    # unlicensed original Lean corpus. Full source stays at pinned URLs.
+def public_record(d:D, *, preview:bool=False):
+    """Return complete captured text, or an explicitly marked CSV preview.
+
+    Generated local reports retain source under its original licensing; they
+    are not automatically suitable for redistribution. `source_text` is the
+    exact span captured by the heuristic, not a complete elaborated statement.
+    """
     result=asdict(d)
-    result["statement"]=result["statement"][:180]
-    result["body"]=result["body"][:70]
+    result["extraction"]={
+        "method":"source-regex","boundaries":"heuristic","elaborated":False,
+        "context_complete":False,
+        "limitations":[
+            "Section variables, notation, open declarations and typeclass resolution are not included or resolved.",
+            "Custom syntax and references inside interpolated expressions are not resolved.",
+        ],
+    }
+    result["text_truncated"]={"statement":False,"body":False,"source_text":False}
+    if preview:
+        for field,limit in (("statement",180),("body",70)):
+            result[field+"_truncated"]=len(result[field])>limit
+            result["text_truncated"][field]=result[field+"_truncated"]
+            result[field]=result[field][:limit]
     return result
 
 
@@ -470,13 +479,15 @@ def analyze(root:Path, out:Path, repo:str, commit:str, expected:dict|None=None, 
     incoming=Counter(dst for _,dst,*_ in edges)
     outgoing=Counter(src for src,*_ in edges)
     module_paths={f.removesuffix(".lean").removeprefix("src/").replace("/","."):f for f in module_imports}
-    module_edges=[]
+    module_edges=[]; imports_outside_sample=[]
     for f,imps in module_imports.items():
         for m in imps:
             if m in module_paths:
                 module_edges.append({"from":f,"to":module_paths[m],"evidence":"explicit-import"})
+            else:
+                imports_outside_sample.append({"path":f,"module":m,"status":"not-in-analyzed-sample"})
     duplicates={n:[d.id for d in ds if d.name==n] for n,count in Counter(d.name for d in ds).items() if count>1}
-    report={"schema":"lean-atlas-v0.1","mode":"source-only-unelaborated","not_proof_check":True,
+    report={"schema":"lean-atlas-v0.2","mode":"source-only-unelaborated","not_proof_check":True,
         "provenance":{"repository":repo,"commit":commit,"files":provenance,"source_hashes_checked":expected is not None,"manifest_complete":expected is not None},
         "summary":{"files":len(files),"lines":sum(x["lines"] for x in provenance),"declarations":len(ds),
                    "kinds":dict(type_counts),"explicit_import_edges_in_sample":len(module_edges),
@@ -486,10 +497,11 @@ def analyze(root:Path, out:Path, repo:str, commit:str, expected:dict|None=None, 
         "declarations":[public_record(d)|{"referenced_by_in_sample":incoming[d.id],"references_in_sample":outgoing[d.id]} for d in ds],
         "candidate_links":[dict(zip(["from","to","role","resolution","evidence_token"],e)) for e in edges],
         "import_links":module_edges,"similarity_candidates":sims,
+        "imports_by_file":module_imports,"imports_outside_sample":imports_outside_sample,
         "graph_navigation":graph}
     (out/"analysis.json").write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-    write_csv(out/"index.csv", [public_record(d)|{"referenced_by":incoming[d.id],"references":outgoing[d.id]} for d in ds],
-              ["id","name","kind","path","line","end_line","source_url","statement","body","statement_fp","referenced_by","references"])
+    write_csv(out/"index.csv", [public_record(d,preview=True)|{"referenced_by":incoming[d.id],"references":outgoing[d.id]} for d in ds],
+              ["id","name","kind","path","line","end_line","source_url","statement","body","statement_truncated","body_truncated","statement_fp","referenced_by","references"])
     write_csv(out/"candidate_links.csv",report["candidate_links"],["from","to","role","resolution","evidence_token"])
     write_csv(out/"similarity.csv", [{k:(";".join(v) if isinstance(v,list) else v) for k,v in row.items()} for row in sims],
               ["from","to","tfidf_cosine","same_syntax_fingerprint","shared_tactics","shared_symbols","interpretation"])

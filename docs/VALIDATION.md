@@ -2,6 +2,9 @@
 
 The framework outputs research navigation aids. Evaluation must not be described as mathematical verification of the analyzed theorem.
 
+See the [v0.2 reading-tools validation record](READING_VALIDATION.md) for the
+completed fixture and pinned-pilot checks.
+
 ## H — falsifiable hypothesis
 
 A combined interface (source references + dependency navigation + explicit similarity candidates) helps people find and compare relevant statements with less task time than reading the original Lean files alone, while not reducing answer accuracy. A **30% time reduction** is a *proposed target*, not a measured result.
@@ -38,3 +41,22 @@ Main uncertainties: participant expertise, question difficulty, imbalanced basel
 - Negative tests for missing manifest files and wrong hashes.
 - Distinguish differently-valued string literals in source comparisons.
 - Explicitly label dependencies and similarity as candidate-only.
+- Preserve full captured text and signal every display omission.
+- Resolve ambiguous names only through explicit IDs; reject dangling references.
+- Compare statement and body independently, retaining operators, numerals and string whitespace.
+- Respect forward/reverse graph orientation, cycles, depth/node bounds and frontier reporting.
+- Return identical query payloads through the Python API and CLI JSON.
+- Preserve unknown text completeness for legacy reports and structured failures for invalid inputs.
+
+## Reading-workflow evaluation sequence
+
+First evaluate declaration lookup, difference identification, and reference
+navigation on known fixtures. Evaluate the same source questions with ordinary
+search and LPAF before introducing generated explanations. An agent experiment
+should hold the model and budget fixed while varying access to the reading tools;
+only then compare model sizes on the same evidence and tasks.
+
+The technical regression suite is an implementation check. It does not measure
+human comprehension, prove the extraction complete for all Lean syntax, or
+establish the proposed time-reduction target. A small pilot is exploratory, and
+the human-benefit decision remains UNCERTAIN until an appropriate study exists.

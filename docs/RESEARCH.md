@@ -5,7 +5,8 @@ This is a selection of relevant work, **not a claim of novelty** or an exhaustiv
 | Area | Reference | Reusable idea |
 |---|---|---|
 | Extraction/premise retrieval | Yang et al., **LeanDojo**, NeurIPS 2023, [arXiv:2306.15626](https://arxiv.org/abs/2306.15626) | Reproducible theorem information and premise retrieval for Lean |
-| Proof pattern discovery | Komendantskaya et al., **Proof Mining with Statistical Methods (ML4PG)**, [arXiv:1402.0081](https://arxiv.org/abs/1402.0081) | Discover recurring patterns beyond exact syntax |
+| Proof pattern discovery | Heras and Komendantskaya, **Proof Pattern Search in Coq/SSReflect**, [arXiv:1402.0081](https://arxiv.org/abs/1402.0081) | Retrieve similar definitions, statements and proof patterns |
+| Reader workflow | Shi et al., **QED in Context**, OOPSLA 2025, [DOI:10.1145/3720426](https://doi.org/10.1145/3720426) | Context navigation and retrieval informed by observations of Lean/Rocq users |
 | Structure-based retrieval | **Tree-Based Premise Selection for Lean4**, NeurIPS 2025, [proceedings](https://proceedings.neurips.cc/paper_files/paper/2025/hash/2ee86e3e9315027920ff2f205f4c3b3a-Abstract-Conference.html) | Compare statement trees, term constants, and structures |
 | Explanation | Hattori et al., INLG 2025, [ACL Anthology](https://aclanthology.org/2025.inlg-main.23/) | Incremental and hierarchy-aware natural-language explanation |
 | Target corpus | [leanprover-community/riemann-hypothesis](https://github.com/leanprover-community/riemann-hypothesis) | First large-case-study repository, independently pinned |

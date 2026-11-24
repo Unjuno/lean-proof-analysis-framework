@@ -39,6 +39,12 @@ No output represents proof correctness. A candidate link is not an authoritative
 
 `analyze_project(source_dir, output_dir, *, repository, commit, expected_blobs=None, entry_points=(), source_prefix="", ...)` writes the same data the CLI uses. `load_report` reads previous JSON data. Consumers should check `schema`, `mode`, and evidence labels before using any result.
 
+The v0.2 reading layer exposes `list_declarations`, `get_declaration`,
+`compare_declarations`, `dependency_slice`, and `find_similar` over a saved
+report. All five return a `lpaf-reading-v0.1` envelope. The CLI renders that
+same envelope as Markdown or JSON; it does not run a different analyzer.
+See [the reading API contract](READING_API.md).
+
 ## Known limitations (must be resolved before scaling)
 
 1. Regex-based declaration scanning is incomplete for Lean syntax, macros, attributes, tactics, and overloaded names.
@@ -53,4 +59,25 @@ Build with the **target repository's own pinned Lean toolchain and Mathlib revis
 
 ## Output truncation
 
-Human-facing JSON/CSV previews may shorten source excerpts for readability and redistribution hygiene. The comparison algorithm uses the untruncated in-memory statement/body; a shortened preview must **never** be presented as a complete Lean statement. Always follow the exact pinned source URL before drawing a mathematical conclusion.
+`lean-atlas-v0.2` JSON stores full captured statement/body text and the original
+`source_text` span. `text_truncated` flags describe the stored fields; `extraction`
+states that boundaries are heuristic, elaboration is unavailable, and enclosing
+context is incomplete. A complete captured span is not a complete elaborated
+theorem type. File hashes and an enclosing-file link make missing context
+inspectable at the source.
+
+CSV retains 180-character statement and 70-character body previews with explicit
+truncation columns. Reading queries independently report available and returned
+character counts, plus any output truncation. `inspect --full-text` removes the
+display cap. These are Unicode code-point counts, not LLM tokens or byte counts.
+
+Legacy `lean-atlas-v0.1` reports lack reliable text-completeness flags. Reading
+queries label that completeness unknown; comparison returns `input_incomplete`
+and does not assert equal complete text. Re-run analysis to recover full fields.
+
+Fingerprints conservatively preserve internal whitespace and trim only outer
+whitespace after comment masking. Formatting changes may produce different
+fingerprints. A matching fingerprint still does not establish equivalence.
+
+`imports_outside_sample` lists explicit imports without an observed corresponding
+input module. It does not assert that a file is missing from its repository.
