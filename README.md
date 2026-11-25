@@ -1,52 +1,100 @@
 # Lean Proof Analysis Framework (LPAF)
 
-**Reusable analysis tools for Lean formal proofs, for both human readers and AI/LLM agents.**
+**A reusable library for scientific analysis of Lean proof corpora, usable by humans and AI/LLM agents.**
 
-**日本語:** 大規模なLean形式的証明について、定理・依存候補・構造的類似・証明パターンを整理し、人間が原典に戻って内容を検討しやすくするオープンなライブラリです。初期の適用対象は公開リーマン予想形式化です。
+**日本語:** 大量のLean形式的証明を分析対象として、依存関係、証明項の構造、反復する部分構造を測定・比較するフレームワークです。人間の読解・探索支援はその応用の一つです。公開リーマン予想形式化を初期のケーススタディとし、他のLeanプロジェクトにも同じ分析を適用できる設計を目指します。
 
-> **Status: experimental source-only reading tools (v0.2).** This version scans Lean *text*. It does **not** invoke Lean, elaborate expressions, resolve actual references, establish theorem equivalence, determine mathematical correctness, or certify proofs. See [limits and evidence types](docs/ARCHITECTURE.md).
+> **Status: experimental scientific analysis toolkit (v0.3).** Includes actual Lean expression export, a SQLite corpus store, and six graph/term analyses through one Python/CLI interface. The separate source-reading tools remain available. The semantic exporter has been tested with **Lean 4.33.1**; compatibility with other versions is unestablished.
 
-## Goals
+## What can be analyzed
 
-- Analyze Lean projects with reusable, independent analysis components.
-- Support **humans** (Markdown, CSV, and graph navigation) and **agents** (Python API, command-line JSON) through the same code path.
-- Preserve provenance: source paths, exact repository revisions, file hashes, analysis methods, and what could not be determined.
-- Cluster related declarations and recurring patterns **as candidates**, while preserving assumptions and source access.
-- Test whether these views help people locate premises, compare theorem statements, and navigate proof structure.
-
-**Not a goal:** Automatically deciding whether the Riemann Hypothesis proof or any other Lean project is mathematically correct.
-
-## What works today
-
-| Interface | Status | Notes |
+| CLI operation | Python function | Recorded evidence it summarizes |
 |---|---|---|
-| Python library (`analyze_project`, `load_report`) | Available | Runs source-level heuristic analysis |
-| CLI (`lpaf analyze`) | Available | Writes `analysis.json`, CSV, DOT, and Markdown |
-| Reading tools: search, inspect, compare, slice, similar | Available in v0.2 | Shared Python functions, CLI Markdown and JSON; see [reading API](docs/READING_API.md) |
-| Agent-compatible JSON | Available | Use `--json`, or read the versioned `analysis.json` file |
-| Lean 4 elaborated `Expr` / actual declaration references | Planned | Requires project-specific Lean toolchain |
-| MCP server for external agents | Planned | No MCP endpoint is shipped in v0.2 |
-| Proof checking / correctness determination | Out of scope | Not claimed |
+| `graph` | `analyze_dependencies` | Reference degrees, weak/strong components, condensation depth, module coupling, selected-root reachability |
+| `overlap` | `dependency_overlap` | Shared and distinct direct references of two declarations |
+| `bottlenecks` | `dependency_bottlenecks` | Dominators in the recorded graph reachable from a selected root |
+| `terms` | `profile_terms` | Expression DAG size, depth, constructor counts, and bounded expanded-occurrence counts |
+| `patterns` | `find_repeated_subterms` | Repeated encoded subterms supported by multiple declarations |
+| `term-compare` | `compare_term_structure` | Structural fingerprints and a bounded first-difference report for two expression roots |
 
-## Getting started
+These operations measure the supplied corpus. Reference overlap does not establish theorem equivalence; graph dominance does not establish mathematical necessity; recurring syntax does not by itself identify a mathematical method. Proof correctness, novelty, and measured reductions in human review time are not claimed.
 
-Requirements: **Python 3.10+**. This source-only baseline uses the Python standard library at runtime. **Lean is not needed** for the demo.
+The library also provides `export_lean`, `import_corpus`, `open_corpus`, and `ProofCorpus.select`. Source-level `analyze_project` and the five reading operations are a supported subset, documented below. A hosted MCP service is not included.
+
+## Quickstart: analyze actual Lean expressions
+
+Requirements: **Python 3.10+** and an existing **Lean 4.33.1** compiler for this example. Python runtime dependencies are from the standard library. Lean is needed for extraction; analysis of a previously exported corpus does not invoke Lean or an LLM.
+
+From this repository's root, use the supplied `lean/lean-toolchain` pin and point `--lean` to the installed compiler executable:
 
 ```bash
 python -m pip install -e .
+lpaf export lean --lean /absolute/path/to/lean-4.33.1-linux/bin/lean \
+  --module Init.Data.List.Basic --prefix List \
+  --max-declarations 2000 --out work/list.jsonl --json
+lpaf corpus import work/list.jsonl --db work/list.sqlite --json
+lpaf corpus info work/list.sqlite --json
+lpaf graph work/list.sqlite --kind theorem --role value --json
+lpaf terms work/list.sqlite --kind theorem --field value --json
+lpaf patterns work/list.sqlite --kind theorem --field value \
+  --min-nodes 3 --min-declarations 2 --limit 20 --json
+```
+
+Exports and imports require **new output paths** and refuse to overwrite existing artifacts. Inspect selection completeness and expression availability before interpreting the results. The declaration cap may bound the selected sample, and an expression may be omitted because of its node cap.
+
+`--kind theorem` helps separate theorems from definitions and other declarations, but can still include compiler-generated equation theorems. All six analyses also accept repeatable `--kind` and `--module` filters, plus `--prefix` for a namespace and its descendants. References to unselected targets are retained and reported as corpus boundaries. Filter options and counts remain in the result provenance.
+
+Scientific commands return JSON: indented by default and compact with `--json`. See the [analysis API](docs/ANALYSIS_API.md) for all options, result contracts, selection semantics, and limits; see the [validation record](docs/ANALYSIS_VALIDATION.md) for executed checks and observed data.
+
+### Analyze a built Lean project
+
+The project must already have its modules and dependencies built with its own `lean-toolchain`. The default runner uses that project's `lake env lean`:
+
+```bash
+lpaf export /path/to/LeanProject --module MyProject.Main --prefix MyProject \
+  --max-declarations 1000 --max-nodes 100000 --timeout 300 \
+  --out work/project.jsonl --json
+lpaf corpus import work/project.jsonl --db work/project.sqlite --json
+```
+
+Replace the project/module names with real ones. Export does not build the project, install a toolchain, or fetch dependencies. `--module`, `--prefix`, and `--name` are repeatable during export; `--lean` selects an explicit binary, and `--lean-path` supplies its module search path when needed. Importing built Lean modules is an explicit code-execution step, unlike source-only scanning. Other Lean versions need separate compatibility testing. The [extractor documentation](lean/README.md) describes the serialized expressions and direct references.
+
+### Use the same analyses from Python
+
+```python
+from lean_proof_analysis import (
+    open_corpus, analyze_dependencies, profile_terms, find_repeated_subterms,
+)
+
+with open_corpus("work/list.sqlite") as corpus:
+    theorems = corpus.select(kinds=["theorem"], name_prefix="List")
+    graph = analyze_dependencies(theorems, role="value", top_k=20)
+    sizes = profile_terms(theorems, field="value", top_k=20)
+    repeats = find_repeated_subterms(theorems, field="value", limit=20)
+    print(graph["coverage"])
+    print(repeats["data"])
+```
+
+`CorpusView` shares the parent connection and must be used before it closes. Each scientific result records its operation, method, options, provenance, coverage, and data. Graph analyses keep elaborated references and lexical candidate references in separate evidence layers.
+
+## Scope and computational limits
+
+- **Storage:** JSONL ingestion streams declaration records into SQLite. The graph algorithms still load their working graph into memory; SQLite does not make every analysis disk-bounded.
+- **Expressions:** Measurements distinguish DAG nodes from expanded tree occurrences. Saturated counts, unavailable expressions, and bounded pattern indexes are explicit in the output.
+- **Interpretation:** Structural comparison preserves the encoded binding/universe/literal information and ignores binder display names. It does not unfold definitions or test definitional equality.
+- **Coverage:** Imported modules, selected declarations, expression availability, and graph boundaries are separate questions. An unselected target is not a known leaf, and an omitted expression is not an empty proof.
+- **Provenance:** Semantic export records the toolchain, selection, and available project metadata, but does not authenticate compiled artifacts or provide source line locations. Cite the module/declaration and export identity when no source URL is available.
+
+The [architecture](docs/ARCHITECTURE.md) specifies these boundaries. The [goals](docs/GOALS.md) and [roadmap](docs/ROADMAP.md) distinguish implemented analyses from research still to be evaluated.
+
+## Source reading and the RH pilot
+
+The text-only layer supports projects without a running Lean toolchain. It captures source spans and **lexical candidate** references; it does not resolve actual Lean references.
+
+```bash
 lpaf analyze examples/demo --out reports/generated/demo \
   --repo Unjuno/lean-proof-analysis-framework \
   --commit "$(git rev-parse HEAD)" --source-prefix examples/demo --entry Demo.true_two --json
-python -m unittest discover -s tests -v
-```
-
-On Windows PowerShell, replace `$(git rev-parse HEAD)` with the current full commit ID. The `--repo` and `--commit` values establish **claimed provenance**; they are not automatically checked against the checkout unless a complete `--expected-manifest` is supplied.
-
-Inspect `reports/generated/demo/OVERVIEW.md` or query `analysis.json` using the operations below. Since v0.2, the JSON contains full captured source spans; publishing a generated report also publishes those excerpts. Source licensing and access conditions remain separate from the toolkit's license.
-
-### Read, compare, and follow references
-
-```bash
 lpaf search reports/generated/demo/analysis.json true
 lpaf inspect reports/generated/demo/analysis.json Demo.true_two --full-text
 lpaf compare reports/generated/demo/analysis.json Demo.labelA Demo.labelB
@@ -54,46 +102,19 @@ lpaf slice reports/generated/demo/analysis.json Demo.true_two --max-depth 2
 lpaf similar reports/generated/demo/analysis.json Demo.true_one --json
 ```
 
-Each command uses the same result as its Python function. Add `--json` for an
-agent-readable result, or omit it for Markdown. Same-name ambiguity, pagination,
-text limits and graph frontiers are explicit. `--full-text` returns all **captured**
-text; enclosing section variables and implicit arguments remain unresolved.
+On Windows PowerShell, replace the commit expression with the actual full commit ID. `--repo` and `--commit` are claimed provenance unless a complete `--expected-manifest` is supplied. Reading commands render Markdown by default or the same result as JSON with `--json`. Publishing a source report also publishes its captured excerpts; upstream licensing still applies.
 
-The [reading-tool design](docs/READING_TOOLS.md) explains seven prioritized ideas
-and their mathematical reading tasks. The [API reference](docs/READING_API.md)
-specifies the five implemented operations, errors, limits and migration from v0.1.
-The [validation record](docs/READING_VALIDATION.md) records fixture checks and the
-pinned RH pilot without claiming measured human benefits.
+Existing reports can be adapted for graph analysis without inventing expressions:
 
-### Python API
-
-```python
-from lean_proof_analysis import analyze_project
-
-report = analyze_project(
-    "examples/demo", "reports/generated/api-demo",
-    repository="Unjuno/lean-proof-analysis-framework",
-    commit="<full commit SHA>",  # use the actual commit of the analyzed checkout
-    entry_points=["Demo.true_two"],
-    source_prefix="examples/demo",
-)
-print(report["summary"])
+```bash
+lpaf corpus import reports/generated/demo/analysis.json \
+  --format source --db work/demo-source.sqlite --json
+lpaf graph work/demo-source.sqlite --json
 ```
 
-```python
-from lean_proof_analysis import (
-    load_report, get_declaration, compare_declarations, dependency_slice,
-)
+Term tools report unavailable expressions for this source-only corpus. See the [reading design](docs/READING_TOOLS.md), [reading API](docs/READING_API.md), and [reading validation](docs/READING_VALIDATION.md) for the retained v0.2 workflow.
 
-report = load_report("reports/generated/demo/analysis.json")
-card = get_declaration(report, "Demo.true_two", max_chars=None)
-differences = compare_declarations(report, "Demo.labelA", "Demo.labelB")
-nearby = dependency_slice(report, "Demo.true_two", max_depth=2, max_nodes=20)
-```
-
-### Riemann Hypothesis case study (10-file pilot)
-
-The example has an **immutable upstream commit and a complete, 10-file SHA-1 manifest**. It downloads public text **to a local ignored folder**, verifies hashes, then runs the same library used for the demo.
+The RH case study remains a **10-file source pilot**, pinned to an immutable upstream commit and a complete SHA-1 manifest:
 
 ```bash
 python examples/riemann/fetch_pilot.py \
@@ -105,29 +126,29 @@ lpaf analyze work/rh-pilot --out reports/generated/rh-pilot \
   --entry riemannHypothesis --json
 ```
 
-This is a **sample**, not a run over the full proof corpus. It is limited to 5,000 local files and may miss Lean-specific declarations, notation, implicit dependencies and macro expansions.
+This pilot does not establish elaborated extraction over the full RH project or generalization to other corpora.
 
-## Repository map
+## Development and documentation
 
-```text
-src/lean_proof_analysis/   Python library + CLI (source-only baseline)
-tests/                     Standard-library unit tests
-examples/demo/             Synthetic fixture
-examples/riemann/          Pinned upstream manifest and read-only fetcher
-docs/GOALS.md              Scope and success criteria
-docs/ARCHITECTURE.md       Evidence levels, data model, interfaces
-docs/ROADMAP.md            Phased implementation plan
-docs/RESEARCH.md           Related work and positioning
-docs/VALIDATION.md         Reproducibility and human-study protocol
-docs/AGENTS.md             Safe integration guidance for AI agents
-docs/READING_TOOLS.md      Prioritized reading tasks and research rationale
-docs/READING_API.md        Five query operations, bounds, errors and examples
+```bash
+python -m unittest discover -s tests -v
+LPAF_LEAN=/absolute/path/to/lean-4.33.1-linux/bin/lean python -m unittest discover -s tests -v
 ```
 
-See [roadmap](docs/ROADMAP.md) for the next implementation tasks and [validation](docs/VALIDATION.md) for explicit test criteria. These tools provide a **reading workflow**; human review-time improvement has not yet been measured.
+The first command skips compiler-dependent cases unless `LPAF_LEAN` is set. The second enables them with the supplied compiler; it does not install one.
+
+| Location | Purpose |
+|---|---|
+| `src/lean_proof_analysis/` | Export wrapper, corpus store, graph/term analyses, source-reading tools, CLI |
+| `src/lean_proof_analysis/lean/Export.lean` | Bundled Lean expression exporter |
+| `lean/` | Compiler pin, native fixture, and extraction instructions |
+| `tests/` | Deterministic fixtures and optional native Lean integration tests |
+| `examples/` | Synthetic source example and pinned RH pilot |
+| [Analysis API](docs/ANALYSIS_API.md) | Scientific library/CLI contracts and resource limits |
+| [Architecture](docs/ARCHITECTURE.md) | Adapters, evidence, schemas, and completeness |
+| [Agent guide](docs/AGENTS.md) | Using results as grounded tool evidence |
+| [Research](docs/RESEARCH.md) | Related work and positioning |
 
 ## License and upstream materials
 
-**The Unlicense** applies to code and documentation authored for this repository. It does **not** relicense Lean, Mathlib, cited publications, or analyzed proof repositories. Consult each upstream source's own license before redistributing it. The RH sources are referenced by hash/URL and are downloaded locally, rather than committed here.
-
-Contributions and issue reports welcome; please keep all automated claims labeled by the evidence actually available.
+**The Unlicense** applies to code and documentation authored for this repository. It does not relicense Lean, Mathlib, publications, or analyzed repositories. RH source files remain referenced by hash/URL and downloaded locally. Contributions should preserve evidence labels and report what was actually tested.

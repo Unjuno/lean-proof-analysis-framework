@@ -1,4 +1,4 @@
-name: Test Python source baseline
+name: Test proof analysis and Lean extraction
 on:
   push:
   pull_request:
@@ -15,3 +15,37 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install -e .
       - run: python -m unittest discover -s tests -v
+  lean-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install package with bundled Lean exporter
+        run: python -m pip install .
+      - name: Verify installed exporter resource
+        run: |
+          python - <<'PY'
+          from importlib import resources
+          from pathlib import Path
+          import lean_proof_analysis
+          assert Path.cwd() not in Path(lean_proof_analysis.__file__).resolve().parents
+          assert resources.files("lean_proof_analysis").joinpath("lean/Export.lean").is_file()
+          PY
+      - name: Download and verify fixture Lean toolchain
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/lpaf-lean"
+          curl --fail --location --retry 3 \
+            https://github.com/leanprover/lean4/releases/download/v4.33.1/lean-4.33.1-linux.tar.zst \
+            --output "$RUNNER_TEMP/lpaf-lean/lean.tar.zst"
+          printf '%s  %s\n' \
+            '890afd185370f85666025b883914ab4f4b339136f8c96167b69cfb62aecaf235' \
+            "$RUNNER_TEMP/lpaf-lean/lean.tar.zst" | sha256sum --check -
+          tar --zstd -xf "$RUNNER_TEMP/lpaf-lean/lean.tar.zst" -C "$RUNNER_TEMP/lpaf-lean"
+          printf 'LPAF_LEAN=%s\n' \
+            "$RUNNER_TEMP/lpaf-lean/lean-4.33.1-linux/bin/lean" >> "$GITHUB_ENV"
+      - name: Run full suite including real Lean integration
+        run: python -m unittest discover -s tests -v

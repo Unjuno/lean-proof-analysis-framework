@@ -2,10 +2,14 @@
 from __future__ import annotations
 import argparse
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from .api import analyze_project, load_report
 from .presentation import render_markdown
+from .analysis_cli import ANALYSIS_COMMANDS, add_analysis_parsers, run_analysis_command
+from .corpus import CorpusError
+from .term_analysis import TermAnalysisError
 from .reading import (
     ReadingError,
     compare_declarations,
@@ -25,8 +29,8 @@ class _Parser(argparse.ArgumentParser):
         raise _ArgumentError(message)
 
 
-def _error(exc: Exception, *, as_json: bool) -> int:
-    if isinstance(exc, ReadingError):
+def _error(exc: Exception, *, as_json: bool, schema: str = "lpaf-reading-v0.1") -> int:
+    if isinstance(exc, (ReadingError, CorpusError, TermAnalysisError)):
         detail = exc.as_dict()
     else:
         if isinstance(exc, _ArgumentError):
@@ -39,7 +43,7 @@ def _error(exc: Exception, *, as_json: bool) -> int:
             code = "invalid_input"
         detail = {"code": code, "message": str(exc), "details": {}}
     if as_json:
-        print(json.dumps({"schema": "lpaf-reading-v0.1", "error": detail},
+        print(json.dumps({"schema": schema, "error": detail},
                          ensure_ascii=False, sort_keys=True))
     else:
         print(f"lpaf: {detail['message']}", file=sys.stderr)
@@ -108,7 +112,7 @@ def _query(args: argparse.Namespace) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = _Parser(prog="lpaf", description="Lean source navigation (not a proof checker)")
+    p = _Parser(prog="lpaf", description="Scientific Lean proof-corpus analysis and source navigation")
     sub = p.add_subparsers(dest="command", required=True)
     a = sub.add_parser("analyze", help="Analyze .lean files and produce review material")
     a.add_argument("source", type=Path)
@@ -122,11 +126,20 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--min-similarity", type=float, default=.78)
     a.add_argument("--json", action="store_true", help="Print machine-readable result descriptor to stdout")
     _reading_arguments(sub)
+    add_analysis_parsers(sub)
     raw_args = sys.argv[1:] if argv is None else argv
     try:
         args = p.parse_args(raw_args)
     except _ArgumentError as exc:
-        return _error(exc, as_json="--json" in raw_args)
+        schema = "lpaf-analysis-v0.1" if raw_args and raw_args[0] in ANALYSIS_COMMANDS else "lpaf-reading-v0.1"
+        return _error(exc, as_json="--json" in raw_args, schema=schema)
+    if args.command in ANALYSIS_COMMANDS:
+        try:
+            result = run_analysis_command(args)
+        except (OSError, ValueError, sqlite3.Error) as exc:
+            return _error(exc, as_json=args.json, schema="lpaf-analysis-v0.1")
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True, indent=None if args.json else 2))
+        return 0
     if args.command == "analyze":
         try:
             result = analyze_project(

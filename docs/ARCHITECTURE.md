@@ -1,83 +1,86 @@
 # Architecture and evidence model
 
-## Flow
+## Two inputs, shared analysis interfaces
 
-```text
-Lean project + immutable revision + input manifest
-  -> source adapter (implemented; source-only heuristics)
-  -> elaborated Lean adapter (planned; Environment, Expr, ConstantInfo)
-  -> common records (declarations, references, evidence, provenance)
-  -> analysis plugins (graph, similarity, pattern, statistics)
-  -> shared report builder
-  -> human Markdown/CSV/DOT | Python API/JSON CLI | future MCP adapter
-```
-
-The adapters must report **what data was actually observed**, and must never silently upgrade heuristic results into verified Lean facts.
-
-## Evidence levels
-
-| Level | Meaning | Current support |
+| Input | Extraction and persistence | Available analyses |
 |---|---|---|
-| `source_observed` | Characters, declaration candidates, imports and hashes seen in files | Partial: heuristics; not a Lean lexer |
-| `lexical_candidate` | A name match or a source-syntax similarity suggestion | Implemented |
-| `lean_elaborated` | A declaration, type, expression or reference resolved by the real Lean environment | **Not yet implemented** |
-| `literature_annotated` | A link to an externally published theorem/method with human-checked source | Planned |
-| `human_interpretation` | Reviewer's explanation or manual categorization | Planned |
+| Built Lean modules under the target project's toolchain | `export_lean` → versioned JSONL → `import_corpus` → SQLite | Graph and expression analyses |
+| Lean source text | `analyze_project` → source report; optionally `import_source_report` → SQLite | Source reading and lexical-candidate graph analyses; no expressions are invented |
 
-No output represents proof correctness. A candidate link is not an authoritative edge of the elaborated proof dependency DAG.
+The adapters report what was observed. Scientific analyses consume the corpus interface, and the CLI calls those same functions. Reading queries continue to consume saved source reports. A future MCP adapter can wrap these interfaces; no MCP server is included.
 
-## Current data and files
+## Evidence classes
 
-- `analysis.json`: version marker (`schema`), source-only `mode`, `not_proof_check`, provenance and derived findings.
-- `index.csv`: declaration candidates and source line references.
-- `candidate_links.csv`: lexical matches (the only supported dependency candidate at this stage).
-- `similarity.csv`: text-based TF-IDF and normalized source-syntax candidate comparisons.
-- `OVERVIEW.md`, `REPORT.md`: human navigation materials.
-- `candidate_deps.dot`: graphical representation of *candidate* edges (can be rendered by Graphviz).
+| Evidence | Meaning | Support |
+|---|---|---|
+| Source observations | Captured characters, hashes, imports, and heuristic declaration spans | Source scanner; not a full Lean lexer |
+| `lexical_candidate` | Source-name reference candidates, including adapted source reports | Implemented; kept separate from elaborated edges |
+| `lean_elaborated` | Declarations, expressions, and direct constant references obtained from a loaded Lean environment | Implemented; tested with Lean 4.33.1 |
+| Literature annotations and human interpretation | Externally grounded theorem/method links or reviewer explanations | Future annotation layer |
 
-## Stable API boundary
+An elaborated reference is an observed constant occurrence in an expression. It does not by itself establish a minimal premise set, transitive axiom inventory, theorem equivalence, or proof correctness. Graph analyses produce a separate result for each reference evidence layer and never silently combine candidate and elaborated edges.
 
-`analyze_project(source_dir, output_dir, *, repository, commit, expected_blobs=None, entry_points=(), source_prefix="", ...)` writes the same data the CLI uses. `load_report` reads previous JSON data. Consumers should check `schema`, `mode`, and evidence labels before using any result.
+## Semantic extraction
 
-The v0.2 reading layer exposes `list_declarations`, `get_declaration`,
-`compare_declarations`, `dependency_slice`, and `find_similar` over a saved
-report. All five return a `lpaf-reading-v0.1` envelope. The CLI renders that
-same envelope as Markdown or JSON; it does not run a different analyzer.
-See [the reading API contract](READING_API.md).
+`lpaf export PROJECT` requires the target's `lean-toolchain` and already built modules. Its default runner is `lake env lean`; callers can explicitly supply a Lean binary and module search path. No project build, dependency download, or toolchain installation is initiated. Loading modules is intentional code execution, distinct from the source scanner.
 
-## Known limitations (must be resolved before scaling)
+The bundled adapter reads `Environment`, `ConstantInfo`, and `Expr`. It exports declaration identities, kinds, known origin modules, types, available proof/body values, and direct references separated into `type` and `value`. Selection can name exact declarations or namespaces. References to declarations outside that selection are retained. The exporter currently does not provide source line locations: `source_url` is null unless separately supplied by another adapter.
 
-1. Regex-based declaration scanning is incomplete for Lean syntax, macros, attributes, tactics, and overloaded names.
-2. String-similarity and shared-name heuristics do not establish definitional or mathematical equivalence.
-3. Extraction may omit declarations and cross-file references; import resolution is only partial.
-4. No streaming database or complexity control beyond file and pair limits for very large source trees.
-5. Markdown summaries may not faithfully describe theorem methods until a grounded semantic layer is available.
+The wrapper records the toolchain value/hash, available dependency-manifest hash and Git state, actual Lean version, and exporter hash. It checks recognized release-version pins against the running compiler; the result records when a toolchain tag cannot be parsed for that check. This metadata does not authenticate compiled artifacts or prove that they were built from a particular clean revision.
 
-## Future elaborated adapter
+Output is published to a new path only after process success and JSONL transport validation. Timeout, malformed output, or a missing footer does not publish a successful artifact. See [the extractor contract](../lean/README.md) and [analysis API](ANALYSIS_API.md).
 
-Build with the **target repository's own pinned Lean toolchain and Mathlib revision**. Read Lean `Environment` and `Expr`/`ConstantInfo` to obtain authoritative declaration types, expression references, name resolution, and a richer provenance tree. Preserve both source-level and elaborated representations; they answer different questions.
+## Schemas and storage
 
-## Output truncation
+| Representation | Schema | Purpose |
+|---|---|---|
+| Export descriptor | `lpaf-export-v0.1` | Output identity, limits, selection completeness, runner provenance |
+| Corpus JSONL | `lpaf-corpus-v0.1` | Header, declaration records, mandatory footer |
+| SQLite store | `lpaf-sqlite-v0.1` | Indexed declarations, separate expression fields, typed/evidence-labeled references, metadata |
+| Scientific results | `lpaf-analysis-v0.1` | Operation, algorithm, options, provenance, coverage, data |
+| Source reports | `lean-atlas-v0.2` | Captured text, lexical candidates, links, and source-analysis findings |
+| Reading results | `lpaf-reading-v0.1` | Bounded source queries, text comparisons, and candidate graph navigation |
 
-`lean-atlas-v0.2` JSON stores full captured statement/body text and the original
-`source_text` span. `text_truncated` flags describe the stored fields; `extraction`
-states that boundaries are heuristic, elaboration is unavailable, and enclosing
-context is incomplete. A complete captured span is not a complete elaborated
-theorem type. File hashes and an enclosing-file link make missing context
-inspectable at the source.
+JSONL import validates one declaration record at a time and atomically publishes a new SQLite database. Per-record byte and expression-node limits apply. Existing databases are not overwritten, and opened corpora are read-only. The legacy single-JSON source adapter loads its report into memory.
 
-CSV retains 180-character statement and 70-character body previews with explicit
-truncation columns. Reading queries independently report available and returned
-character counts, plus any output truncation. `inspect --full-text` removes the
-display cap. These are Unicode code-point counts, not LLM tokens or byte counts.
+Expressions are serialized as child-first DAGs. Nodes retain constructor tags, ordered child indices, and encoded data such as constant names, bound-variable indices, universe strings, literals, and binder information. Binder display names are separate. Structural analysis ignores those display names, performs no unfolding or reduction, and does not test Lean definitional equality.
 
-Legacy `lean-atlas-v0.1` reports lack reliable text-completeness flags. Reading
-queries label that completeness unknown; comparison returns `input_incomplete`
-and does not assert equal complete text. Re-run analysis to recover full fields.
+`ProofCorpus.select` returns a lightweight `CorpusView` sharing the open database connection. Kinds and modules are exact matches, with a union within each repeated filter and an intersection across filter categories. A namespace prefix matches itself and descendants separated by a dot. The view filters reference **sources**, preserving references to excluded or absent targets. It records its filters and counts without modifying the stored corpus. A theorem-only view can still contain generated equation theorems.
 
-Fingerprints conservatively preserve internal whitespace and trim only outer
-whitespace after comment masking. Formatting changes may produce different
-fingerprints. A matching fingerprint still does not establish equivalence.
+## Analysis boundaries and resource limits
 
-`imports_outside_sample` lists explicit imports without an observed corresponding
-input module. It does not assert that a file is missing from its repository.
+| Component | Behavior and bound |
+|---|---|
+| Export | Streams JSONL records, but holds the imported Lean environment and declaration inventory; declaration and per-expression node caps are separate |
+| Graph summaries | Load selected declarations/references into memory; iterative graph passes avoid recursive stack limits; component examples and root queries are bounded |
+| Overlap | Compares the direct recorded reference sets of two named declarations; result lists have an output cap |
+| Bottlenecks | Computes graph dominators in the root-reachable internal graph with a work budget; exhausted budgets do not produce partial dominator claims |
+| Term profile | Processes recorded expression DAGs without expanding shared subtrees into an exponentially large tree; occurrence counts can saturate with explicit lower-bound status |
+| Repeated subterms | Retains a capped index of structural fingerprints; incomplete indexes and iteration-order effects are reported |
+| Term comparison | Compares encoded structure and returns a bounded difference path; missing expressions remain unavailable |
+
+The graph edge direction is consumer → reference. Internal connectivity and condensation depth refer to recorded declarations. Boundary targets are counted separately; their unknown outgoing references are not treated as known empty adjacency. Module coupling and direct-reference rankings must be interpreted within this scope. A cycle is a graph observation, not a proof-flaw diagnosis.
+
+Repeated subterms can overlap, so their occurrence counts cannot be added as independent compression savings. Fingerprint matches describe the recorded structural encoding; they do not identify mathematical strategies or novelty. Type expressions and proof/body expressions are separate fields and should be compared under matching options.
+
+## Completeness has several meanings
+
+- **Transport:** Header, records, and footer must form a valid completed stream. A missing footer is an interrupted export.
+- **Declaration selection:** Footer `complete` states whether the selected declaration set was capped. A valid bounded export may have `complete=false`.
+- **Expression availability:** Each field is `available`, `node_limit`, `unavailable`, or, for values, `no_value`. A capped expression is omitted in full. Native direct-reference extraction still examines the full expression.
+- **Corpus view and graph boundary:** Filtering can remove declarations without removing edges to them. Selection completeness does not imply graph closure.
+- **Analysis and display:** Work/index budgets, saturated counts, and output-list caps are distinct from input completeness. Preserve the relevant flags rather than assigning one universal “complete” label.
+
+## Public library boundary
+
+Corpus creation/opening and views live in `corpus.py`; explicit Lean execution lives in `extraction.py`. `graph_analysis.py` provides graph summaries, overlap, and dominators. `term_analysis.py` provides profiles, repeated subterms, and structural comparisons. Public functions are re-exported from `lean_proof_analysis`, and `analysis_cli.py` only adapts arguments/results.
+
+The source API (`analyze_project`, `load_report`) and five reading functions remain public. Their source-report and reading-result schemas are separate from the corpus and scientific-result schemas. See [analysis API](ANALYSIS_API.md) and [reading API](READING_API.md).
+
+## Retained source-reading behavior
+
+Source scanning remains heuristic and text-only. It can miss Lean declarations, notation, macro expansions, enclosing context, and implicit dependencies. Its statement-role references become `type`-role **lexical candidates** when adapted; this is not an elaborated Lean type.
+
+`analysis.json` stores captured statements, bodies, and original source spans. CSV files retain capped previews with truncation columns; Markdown and DOT provide navigation views. A complete captured span is not a complete elaborated theorem type. `imports_outside_sample` means that no corresponding input module was observed, not that a file is missing from the upstream repository.
+
+Reading queries distinguish stored-text completeness from display truncation. `inspect --full-text` removes only the display cap. Legacy `lean-atlas-v0.1` reports lack reliable completeness flags; queries label that state unknown, and comparisons do not claim equality of complete text. Re-analyze the source to recover full fields. Source fingerprints retain internal whitespace after comment masking, so formatting changes can change them.

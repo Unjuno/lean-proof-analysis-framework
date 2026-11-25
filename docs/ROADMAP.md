@@ -1,59 +1,61 @@
 # Roadmap
 
-Priority is based on reliable evidence and human usefulness, **not** the number of analysis algorithms.
+Prioritize reproducible analysis of Lean proof corpora, explicit evidence, and useful corpus questions. Reading/navigation is one application; adding more algorithm names alone is not the goal.
 
-## Milestone 0 — repository foundation (current)
+## Delivered foundation: source analysis and reading
 
-- [x] Public Unlicense repository structure.
-- [x] Installable Python package with CLI/JSON and Python API.
-- [x] Source-level analysis baseline and deterministic unit tests.
-- [x] Pinned RH 10-file example and expected-hash manifest.
-- [x] Agent usage contract and limitations.
-- [ ] Demonstrate reproducibility on a fresh clone in CI with a pinned upstream download (network-gated).
+- [x] Public Unlicense repository, installable Python library, CLI, and machine-readable results.
+- [x] Text-only source analysis with provenance, complete-manifest checks, and a pinned 10-file RH pilot.
+- [x] Search, inspection, captured-text comparison, bounded candidate-reference slices, and stored similarity retrieval.
+- [x] Shared reading API/CLI, full captured source fields, and explicit legacy/truncation behavior.
 
-## Milestone 1 — trustworthy Lean data extraction
+The [reading API](READING_API.md) and [reading validation](READING_VALIDATION.md) remain the record for this subset.
 
-- [ ] Use the Lean project's pinned `lean-toolchain` / `lake-manifest.json`.
-- [ ] Add an elaborator-backed extractor for declaration names, types, `Expr`, and reference edges.
-- [ ] Preserve declaration origin, namespaces, implicit arguments and source locations.
-- [ ] Persist unknown/unresolved entities and per-stage errors rather than dropping them.
-- [ ] Benchmark extraction against a manually checked sample.
+## Delivered v0.3: scientific analysis baseline
 
-## Milestone 2 — analysis library
+- [x] Actual Lean environment/`Expr` exporter for built modules, tested with Lean 4.33.1.
+- [x] Explicit execution wrapper using the project's toolchain, output validation, time limits, and new-file publication.
+- [x] Versioned JSONL and SQLite corpus formats, per-field expression availability, provenance, and read-only queries.
+- [x] Separate type/value references, retained outside targets, and independent evidence layers.
+- [x] Kind/module/namespace views shared by all six analyses.
+- [x] Graph degrees, connectivity, condensation depth, selected-root reachability, and module coupling.
+- [x] Direct-reference overlap and budgeted graph dominators.
+- [x] Expression DAG profiling, bounded repeated-subterm mining, and pairwise encoded-structure comparison.
+- [x] Shared Python/CLI operations with deterministic fixtures and optional native Lean integration checks.
 
-- [ ] Common typed data schema with provenance and evidence types.
-- [x] Versioned source-reading query envelope, structured errors, and explicit bounds.
-- [x] Declaration search/inspection and statement/body text comparison.
-- [x] Bounded forward/reverse candidate-reference slices and stored similarity retrieval.
-- [ ] Graph algorithms (reachable roots, modules, shared dependencies, centrality).
-- [ ] Structural similarity on elaborated types; distinguish type similarity from proof-step similarity.
-- [ ] Lexical and structural retrieval as independently measurable baselines.
-- [ ] Control computational costs through SQLite indexes, incremental runs and capped candidate retrieval.
+These checkmarks describe implementations, not universal compatibility, mathematical correctness, or measured human benefit. See [analysis validation](ANALYSIS_VALIDATION.md) for what was actually executed.
 
-## Milestone 3 — human/agent workflows
+## Next: extraction fidelity and corpus scope
 
-- [x] CLI Markdown and JSON over the same reading functions and source locations.
-- [x] Explicit text caps, pagination and candidate-graph exploration frontiers.
-- [ ] Full elaborated premises and actual reference information in reading cards.
-- [ ] Expandable groups, representative examples with differences, and accepted-lemma reading boundaries.
-- [ ] Optional model-generated explanations tied to source evidence.
-- [ ] Optional MCP tools wrapping the same API; security and test plan required.
+- [ ] Test a declared compatibility matrix beyond Lean 4.33.1, preserving each target project's own pin.
+- [ ] Join semantic declarations to validated source locations without fabricating line anchors.
+- [ ] Distinguish generated auxiliaries/equation theorems from authored declarations using explicit, validated metadata.
+- [ ] Measure extraction coverage against a manually checked sample, including namespaces, opaque values, inductive declarations, and boundary references.
+- [ ] Run elaborated extraction on a pinned RH project environment and an unrelated Lean project. The existing RH pilot is source-only.
+- [ ] Record reproducible build/artifact provenance beyond the current toolchain, manifest hash, and observed Git state.
 
-## Milestone 4 — evaluation
+## Next: scaling and scientific comparisons
 
-- [ ] Compare search-only, graph-only, and combined interfaces.
-- [ ] Run a small human pilot on navigation/compare tasks with source-grounded answer keys.
-- [ ] Evaluate correctness of retrieved information, unresolved cases, time, and subjective burden.
-- [ ] Replicate on at least one unrelated Lean project.
+- [ ] Benchmark extraction, import, graph analysis, and term analysis separately, recording hardware, versions, sample selection, memory, and repeated-run timings.
+- [ ] Add incremental imports/reuse and graph implementations that avoid holding the full working graph in memory where justified by measured bottlenecks.
+- [ ] Evaluate sensitivity to declaration-kind/module filters, generated code, expression normalization, and boundary coverage.
+- [ ] Add retrieval or grouping methods only with a specified analysis question and a lexical/structural baseline.
+- [ ] Evaluate cross-corpus comparisons under matching extraction and selection policies before interpreting metric changes.
 
-## First work items
+## Next: human and agent applications
 
-1. Use the v0.2 reading workflow on concrete declaration lookup, comparison and reference-navigation questions; see [reading tools](READING_TOOLS.md).
-2. Extend the query envelope into the common typed extraction/evidence schema tracked in issue #2; the v0.2 source contract does not complete that milestone.
-3. Implement elaborated Lean reference extraction on a small, pinned fixture (issue #1), separating type references from proof/body references.
-4. Add resolved binder/assumption cards and selective definition expansion using that extractor.
-5. Evaluate task accuracy and effort on the RH sample and an unrelated project (issue #3). Pattern grouping and reading packets follow the evidence requirements in the design document.
+- [ ] Ground premise/binder cards and selective definition expansion in extracted expressions.
+- [ ] Provide navigable representations of repeated structures with representative examples and explicit differences.
+- [ ] Evaluate analysis-task accuracy for humans and LLM callers using the same tool results.
+- [ ] Run a separate reading/navigation study if claiming reduced human effort; specify tasks, answer keys, baselines, and unresolved cases.
+- [ ] Add an optional MCP adapter over the existing API when a concrete client requires it.
 
-Manifest completeness tests and preservation of full captured text are already
-implemented. Adding more statistical scores is secondary to making specific
-reading questions answerable with adequate evidence.
+## Immediate research sequence
+
+1. Reproduce the native fixture and standard-library experiments described in the validation record.
+2. Choose one corpus question, for example which repeated subterms remain common after separating definitions, theorems, and generated declarations.
+3. Freeze the corpus revision, toolchain, selection, expression field, evidence policy, and analysis limits; record boundary and missing-expression counts.
+4. Check representative outputs against the actual exported expressions, then repeat under a relevant alternate selection.
+5. Replicate on an unrelated project before making a general claim. Evaluate human or model performance separately from structural measurements.
+
+The framework currently supports these experiments; their scientific conclusions and practical benefits still require evidence.

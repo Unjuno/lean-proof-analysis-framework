@@ -1,0 +1,167 @@
+{
+  "date": "2026-11-25",
+  "environment": {
+    "lean": "4.33.1",
+    "machine": "x86_64",
+    "os": "Linux",
+    "python": "3.12.14"
+  },
+  "lean_release": {
+    "sha256": "890afd185370f85666025b883914ab4f4b339136f8c96167b69cfb62aecaf235",
+    "url": "https://github.com/leanprover/lean4/releases/download/v4.33.1/lean-4.33.1-linux.tar.zst"
+  },
+  "list_case": {
+    "comparison": {
+      "left": "List.append_assoc",
+      "reference_overlap_counts": {
+        "left_only": 0,
+        "right_only": 2,
+        "shared": 15
+      },
+      "right": "List.append_nil",
+      "term_relation": "different_encoded_structure"
+    },
+    "corpus_declarations": 824,
+    "corpus_reference_records": 10585,
+    "dominator_query": {
+      "computation": {
+        "complete": true,
+        "passes": 1,
+        "work": 0
+      },
+      "dominated_count_includes_self": true,
+      "evidence": "lean_elaborated",
+      "outside_targets": 15,
+      "ranked_nodes": 0,
+      "ranking_truncated": false,
+      "reachable_internal_nodes": 1,
+      "root": "List.append_assoc",
+      "root_excluded_from_ranking": true,
+      "scope": "root-reachable-internal-induced-graph",
+      "status": "complete",
+      "top_bottlenecks": []
+    },
+    "export_provenance": {
+      "compiled_artifact_authentication": "not_performed",
+      "exporter_sha256": "34ff2cad00d025e51dd77c14bedf21ab3d0874c43df358ce2c06e2f6c7c7b6c1",
+      "git_before_export": {
+        "dirty": true,
+        "head": "eb3c0dd8f0edd9df4bc5a2e84e45aeb5e0d3b619"
+      },
+      "lake_manifest_sha256": null,
+      "lean_toolchain": {
+        "sha256": "3aac669c7a910ec2389f4e4f921b605adf6ebf2d1e0c9b9cd0be4d33f3f5db71",
+        "value": "leanprover/lean4:v4.33.1"
+      },
+      "lean_version": "4.33.1",
+      "toolchain_version_check": "matched"
+    },
+    "export_sha256": "540f8452782a83e4134313b69b53772be01202eb42032207584ac95e34abb1fa",
+    "max_declarations": 2000,
+    "max_nodes_per_expression": 100000,
+    "modules": [
+      "Init.Data.List.Basic"
+    ],
+    "namespace_selection": [
+      "List"
+    ],
+    "patterns": {
+      "first_pattern_required_context_binders": 5,
+      "index_complete": true,
+      "indexed": 16620,
+      "options": {
+        "count_cap": 1000000000000,
+        "examples_per_pattern": 5,
+        "field": "value",
+        "limit": 5,
+        "max_unique_patterns": 100000,
+        "min_declarations": 3,
+        "min_nodes": 5
+      },
+      "output_truncated": true,
+      "qualifying": 465,
+      "top_declaration_support": [
+        25,
+        24,
+        24,
+        21,
+        21
+      ]
+    },
+    "profile": {
+      "analyzed_expressions": 298,
+      "depth": {
+        "maximum": 62,
+        "mean": 16.06711409395973,
+        "minimum": 4
+      },
+      "expanded_occurrences_total": {
+        "cap": 1000000000000,
+        "exact": true,
+        "interpretation": "exact",
+        "value": 111410
+      },
+      "reachable_dag_nodes_total": 28818,
+      "serialized_nodes_total": 28818
+    },
+    "scope": "matching names across the imported environment",
+    "selection_complete": true,
+    "value_reference_graph": {
+      "internal_edges": 63,
+      "nodes": 298,
+      "outside_edges": 2594,
+      "outside_targets": 332,
+      "self_loops": 0,
+      "unique_edges": 2657
+    },
+    "view": {
+      "declarations": 298,
+      "generated_theorems_may_be_present": true,
+      "kinds": [
+        "theorem"
+      ]
+    }
+  },
+  "not_performance_benchmark": true,
+  "not_proof_check": true,
+  "package_version": "0.3.0",
+  "record": "functional-validation",
+  "regression_suite": {
+    "errors": 0,
+    "failures": 0,
+    "native_lean_enabled": true,
+    "skipped": 0,
+    "tests": 119
+  },
+  "rh_source_case": {
+    "all_manifest_blobs_matched": true,
+    "analyzed_expressions": 0,
+    "commit": "aa01316131472849f8e3b5b3e49f04d0a06c983f",
+    "declarations": 46,
+    "expression_status_counts": {
+      "unavailable": 46
+    },
+    "files": 10,
+    "graph": {
+      "lexical_candidate": {
+        "internal_edges": 44,
+        "nodes": 46,
+        "outside_edges": 0,
+        "outside_targets": 0,
+        "unique_edges": 44
+      }
+    },
+    "manifest": "examples/riemann/expected_blobs.json",
+    "manifest_sha256": "bb141a68ca4ad2ad788123ed31b4049d8d4ac9a20bfccfa80700e2d09b75483d",
+    "reference_records": 46,
+    "repository": "leanprover-community/riemann-hypothesis",
+    "semantic_extraction_performed": false
+  },
+  "untested": [
+    "Lean versions other than 4.33.1",
+    "whole-Mathlib scale",
+    "full-RH semantic extraction",
+    "controlled human benefit",
+    "small-model sufficiency"
+  ]
+}
